@@ -19,10 +19,26 @@ CSV HEADER;
 
 CREATE INDEX search_index_name ON search_index USING GIST(name gist_trgm_ops);
 
-ALTER TABLE search_index ADD COLUMN ts tsvector 
+ALTER TABLE search_index ADD COLUMN ts tsvector
     GENERATED ALWAYS AS (to_tsvector('russian', name)) STORED;
 
 CREATE INDEX ts_idx ON search_index USING GIN (ts);
+
+COPY patent(reg_number, reg_date, appl_date, author_raw, owner_raw, address, name, actual, class, subclass, kind, id)
+FROM '/tmp/patents-demo.csv'
+DELIMITER ','
+CSV HEADER;
+docker cp persons-demo.csv phd-postgres:/tmp
+
+COPY person(kind, tax_number, full_name, id)
+FROM '/tmp/persons-demo.csv'
+DELIMITER ','
+CSV HEADER;
+
+COPY ownership(patent_id, person_id)
+FROM '/tmp/ownership-demo.csv'
+DELIMITER ','
+CSV HEADER;
 
 
 -- ClickHouse --
@@ -51,3 +67,6 @@ ALTER TABLE search.search_base MATERIALIZE INDEX sbx;
 SET allow_experimental_inverted_index = true;
 ALTER TABLE search.search_base ADD INDEX inv_idx(name) TYPE full_text;
 ALTER TABLE search.search_base MATERIALIZE INDEX inv_idx;
+
+
+docker run -d --name test-ch -p 18123:8123 --ulimit nofile=262144:262144 test:latest
