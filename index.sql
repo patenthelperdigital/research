@@ -1,4 +1,7 @@
 -- Postgres --
+
+docker run --name phd-postgres -e POSTGRES_USER=phd -e POSTGRES_PASSWORD=phd -d phd
+
 CREATE TABLE search_index (
     name text,
     tax_number text,
@@ -24,19 +27,19 @@ ALTER TABLE search_index ADD COLUMN ts tsvector
 
 CREATE INDEX ts_idx ON search_index USING GIN (ts);
 
-COPY patent(reg_number, reg_date, appl_date, author_raw, owner_raw, address, name, actual, class, subclass, kind, id)
-FROM '/tmp/patents-demo.csv'
+COPY patent(reg_number, reg_date, appl_date, author_raw, owner_raw, address, name, actual, category, subcategory, kind, region, city, author_count)
+FROM '/tmp/patents-demo-v2.csv'
 DELIMITER ','
 CSV HEADER;
-docker cp persons-demo.csv phd-postgres:/tmp
+docker cp patents-demo-v2.csv phd-postgres:/tmp
 
-COPY person(kind, tax_number, full_name, id)
-FROM '/tmp/persons-demo.csv'
+COPY person(kind, tax_number, full_name, active)
+FROM '/tmp/persons-demo-v2.csv'
 DELIMITER ','
 CSV HEADER;
 
-COPY ownership(patent_id, person_id)
-FROM '/tmp/ownership-demo.csv'
+COPY ownership(patent_kind, patent_reg_number, person_tax_number)
+FROM '/tmp/ownership-demo-v2.csv'
 DELIMITER ','
 CSV HEADER;
 
@@ -54,12 +57,13 @@ CREATE TABLE search.search_base (
     `activity_code` String,
     `legal_address` String,
     `fact_address` String,
+    INDEX full_text_idx(name) TYPE full_text(0),
+    INDEX tokenbf_idx(name) TYPE tokenbf_v1(4096, 3, 42),
 )
 ENGINE = MergeTree()
 ORDER BY name;
 
-cat /home/pavel/search_base.csv | docker exec -i phd-ch clickhouse-client --query='INSERT INTO search.search_base FORMAT CsvWithNames'
-
+cat /home/pavel/search-base.csv | docker exec -i phd-ch clickhouse-client --query='INSERT INTO search.search_base FORMAT CsvWithNames'
 
 ALTER TABLE search.search_base ADD INDEX sbx(name) TYPE tokenbf_v1(4096, 3, 42);
 ALTER TABLE search.search_base MATERIALIZE INDEX sbx;
